@@ -31,8 +31,9 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
 public class kMeanMerge extends Configured implements Tool {
-	static final int MAX_ITER = 3;
+	static final int MAX_ITER = 20;
 	static final String centroidKey = "CENTROID_KEY";
+	static final String ALGO_KEY = "ALGO_KEY";
 
 	public static void main(String[] args) throws Exception {
 		int res = ToolRunner.run(new Configuration(), new kMeanMerge(), args);
@@ -44,15 +45,25 @@ public class kMeanMerge extends Configured implements Tool {
 		System.out.println(Arrays.toString(args));
 
 		String inputDir = args[0];
-		String outputDir = args[1]+"/iter-" + 0; 
+		String version = args[3];
+	
+		/**
+		 * "ABS" or "L2"
+		 */
+		String algo = args[4];
+		
+		String outputDir = args[1]+"/iter-" + algo + "-" + version + "-" + 0; 
 		String centroidDir = args[2];
-
-		for(int i = 0; i < MAX_ITER; i++){
+		
+		System.out.println("Centroid Dir: " + centroidDir);
+		
+		for(int i = 0; i <= MAX_ITER; i++){
 			System.out.println("Iteration: " + i);
 			System.out.println("Centroid Dir: " + centroidDir);
-
+			
 			Configuration conf = getConf();
 			conf.set(centroidKey, centroidDir);
+			conf.set(ALGO_KEY, algo);
 
 			Job job = Job.getInstance(conf);
 			job.setJobName("kMeanMerge-iter-" + i);
@@ -76,7 +87,7 @@ public class kMeanMerge extends Configured implements Tool {
 			boolean success = job.waitForCompletion(true);
 
 			centroidDir = outputDir+"/part-r-00000";
-			outputDir = args[1]+"/iter-" + (i + 1);
+			outputDir = args[1]+"/iter-" + algo + "-" + version + "-" + (i + 1);
 
 			if(!success){
 				return 1;
@@ -129,21 +140,39 @@ public class kMeanMerge extends Configured implements Tool {
 
 		for(int i = 0; i < vec1.length; i++){
 			float t = vec1[i] - vec2[i];
-			dis += t * t;
+			dis += (t * t);
 		}
 
 		return dis;
 	}
+	
+	//distance computation
+	//output L2^2, which is more handy than L2 itself. It also saves some computation costs.
+	public static float calcAbsDistance(float[] vec1, float[] vec2){
+		assert (vec1.length == vec2.length);
+
+		float dis = 0;
+
+		for(int i = 0; i < vec1.length; i++){
+			float t = Math.abs(vec1[i] - vec2[i]);
+			dis += t;
+		}
+
+		return dis;
+	}
+	
 
 	public static class Map extends Mapper<LongWritable, Text, IntWritable, NodeWritable> {
 		private IntWritable outKey = new IntWritable();
 		private ArrayList<float[]> centroids;
+		private String algo;
 
 		@Override
 		public void setup(Context context){
 			try {
 				Configuration conf = context.getConfiguration();
 				centroids = loadCentroidsTables(conf.get(centroidKey), context.getConfiguration());
+				algo = conf.get(ALGO_KEY);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -169,9 +198,17 @@ public class kMeanMerge extends Configured implements Tool {
 				float[] centroid = centroids.get(i);
 				assert centroid.length == vec.length;
 
-				//TODO add distance switch here
-				float distance = calcL2SquareDistance(vec, centroid);
-
+				float distance = 0;
+				
+				switch(algo){
+					case "ABS":
+						distance = calcAbsDistance(vec, centroid);
+						break;
+					case "L2":
+					default:
+						distance = calcL2SquareDistance(vec, centroid);
+				}
+				
 				if(distance < minDistance){
 					minCentroid = i;
 					minDistance = distance;
