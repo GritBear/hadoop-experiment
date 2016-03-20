@@ -227,8 +227,22 @@ batchCostArr, batchTime, batchIteration = runBatch(np.copy(X_all), np.copy(Y_all
 SGDCostArr, SGDTime, SGDIteration, SGDcostDeltaArr = runSDG(np.copy(X_all), np.copy(Y_all))
 mBatchCostArr, mBatchTime, mBatchIteration, mBatchcostDeltaArr = runMiniBatch(np.copy(X_all), np.copy(Y_all))
 
+batchTime
+SGDTime
+mBatchTime
+
+batchIteration
+SGDIteration
+mBatchIteration
+
 import matplotlib.pyplot as plt
+plt.plot(batchCostArr)
 plt.plot(SGDCostArr)
+plt.plot(mBatchCostArr)
+
+plt.legend(['Batch', 'SGD', 'MiniBatch'], loc='upper right')
+
 plt.ylabel('Error')
 plt.xlabel('Iteration')
+plt.title('Cost vs Iteration')
 plt.show()
